@@ -1,0 +1,4 @@
+<plugin>
+    <name>scala-stats-plugin</name>
+    <classname>plugin.StatsPlugin</classname>
+</plugin>
