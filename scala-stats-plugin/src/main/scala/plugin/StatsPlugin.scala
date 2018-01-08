@@ -4,6 +4,7 @@ import java.io.FileOutputStream
 import java.nio.channels.FileLock
 
 import scala.collection.mutable
+import scala.reflect.internal.Flags
 import scala.tools.nsc.Global
 import scala.tools.nsc.ast.TreeDSL
 import scala.tools.nsc.plugins.{Plugin, PluginComponent}
@@ -17,27 +18,24 @@ class StatsPlugin(val global: Global) extends Plugin {
 }
 
 class Stats {
-  val funcs = new mutable.ArrayBuffer[(String, Int)]()
+  val funcs = new mutable.ArrayBuffer[(String, Int, Int)]()
   lazy val sorted = funcs.sortBy(_._2)
-  def getMean = if (funcs.isEmpty) 0.0 else funcs.foldLeft(0.0){case (s, (_, n)) => s + n} / funcs.length
+  def getMean = if (funcs.isEmpty) 0.0 else funcs.foldLeft(0.0){case (s, d) => s + d._2} / funcs.length
   def getMax = if (funcs.isEmpty) 0 else sorted.last._2
   def getPercentile(p: Int) = if (funcs.isEmpty) 0.0 else {
     val s = Math.round(funcs.length * (p.toDouble / 100.0)).toInt
-    sorted.take(s).foldLeft(0.0){case (s, (_, n)) => s + n} / s
+    sorted.take(s).foldLeft(0.0) { case (s, d) => s + d._2 } / s
   }
   // I know, but it's good enough
   def save() = {
     val fw = new FileOutputStream("stats.txt", true)
-    var l: FileLock = null
     try {
-      l = fw.getChannel.lock() // need to lock, 'cause sbt may compile projects in parallel
-      funcs.foreach { case (name, cnt) =>
-        fw.write(s"$name $cnt\n".getBytes("UTF-8"))
+      funcs.foreach { case (name, cnt, implicits) =>
+        fw.write(s"$name $cnt $implicits\n".getBytes("UTF-8"))
       }
     } catch {
       case ex: Exception => ex.printStackTrace()
     } finally {
-      if (l != null) l.release()
       fw.close()
     }
   }
@@ -64,8 +62,11 @@ class StatsTransform(plugin: Plugin, val global: Global) extends PluginComponent
     override def transform(tree: Tree): Tree = {
       tree match {
         case t@DefDef(mods, name, tparams, vparamss, tpt, rhs) =>
+          val numImplicits = vparamss.lastOption.collect {
+            case ps if ps.headOption.forall(_.mods.hasFlag(Flags.IMPLICIT)) => ps.size
+          }
           val num = vparamss.flatten.length
-          stats.funcs.append((name.toString, num))
+          stats.funcs.append((name.toString, num, numImplicits.getOrElse(0)))
           tree
         case other => super.transform(other)
       }
