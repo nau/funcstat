@@ -16,7 +16,8 @@ Build the compiler plugin. This will cross-compile the plugin for Scala 2.11 and
 
 Add the following to build settings of a project you'd like to inspect.
 
-    addCompilerPlugin("plugin" %% "scala-stats-plugin" % "0.1.0-SNAPSHOT")
+    addCompilerPlugin("plugin" %% "scala-stats-plugin" % "0.1.0-SNAPSHOT"),
+    concurrentRestrictions in Global := Seq(Tags.limit(Tags.Compile, 1))
 
 Then compile the project. After compilation `stats.txt` will be generated.
 Use `stats.ipynb` to visualize the results.
